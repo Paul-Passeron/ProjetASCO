@@ -1,10 +1,11 @@
 type token =
-  | T_INT_LIT of int
+    T_INT_LIT of int
   | T_STR_LIT of string
   | T_IDENTIFIER of string
   | T_NUMBER
   | T_STRING
   | T_BOOLEAN
+  | T_ANY
   | T_IF
   | T_ELSE
   | T_WHILE
@@ -23,6 +24,7 @@ type token =
   | T_DOT
   | T_COLON
   | T_SEMICOLON
+  | T_BAR
   | T_PLUS
   | T_MINUS
   | T_MUL
@@ -42,6 +44,20 @@ type token =
   | T_POW
   | EOL
   | EOF
-
-val int_of_hex : string -> int
-val int_of_bin : string -> int
+val yytransl_const : int array
+val yytransl_block : int array
+val yylhs : string
+val yylen : string
+val yydefred : string
+val yydgoto : string
+val yysindex : string
+val yyrindex : string
+val yygindex : string
+val yytablesize : int
+val yytable : string
+val yycheck : string
+val yynames_const : string
+val yynames_block : string
+val yyact : (Parsing.parser_env -> Obj.t) array
+val yytables : Parsing.parse_tables
+val program : (Lexing.lexbuf -> token) -> Lexing.lexbuf -> Tpscrpt.program

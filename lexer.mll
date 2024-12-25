@@ -1,6 +1,6 @@
 {
 
-open Parsertmp
+open Parser
 
 let keyword_table = Hashtbl.create 53
 let _ =
@@ -49,6 +49,7 @@ rule token = parse
   | '.'                 { T_DOT }
   | ':'                 { T_COLON }
   | ';'                 { T_SEMICOLON }
+  | '|'                 { T_BAR }
   | '('                 { T_OPEN_PAR }
   | ')'                 { T_CLOSE_PAR }
   | '{'                 { T_OPEN_BRA }
@@ -73,16 +74,7 @@ rule token = parse
   | '!'                 { T_NOT }
   | "**"                { T_POW }
   | word      as lexeme { token_of_word lexeme }
-  | hex_const as lexeme { T_INT_LIT (int_of_hex lexeme) }
-  | bin_const as lexeme { T_INT_LIT (int_of_bin lexeme) }
+  | hex_const as lexeme
+  | bin_const as lexeme
   | dec_const as lexeme { T_INT_LIT (int_of_string lexeme) }
   | str_lit   as lexeme { T_STR_LIT lexeme }
-
-{
-let read_whole_file filename =
-  (* open_in_bin works correctly on Unix and Windows *)
-  let ch = open_in_bin filename in
-  let s = really_input_string ch (in_channel_length ch) in
-  close_in ch;
-  s
-}
