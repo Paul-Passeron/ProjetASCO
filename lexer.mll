@@ -78,3 +78,4 @@ rule token = parse
   | bin_const as lexeme
   | dec_const as lexeme { T_INT_LIT (int_of_string lexeme) }
   | str_lit   as lexeme { T_STR_LIT lexeme }
+  | eof                 { EOF }

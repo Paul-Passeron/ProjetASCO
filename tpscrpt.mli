@@ -23,7 +23,7 @@ type expression =
   | Strlit of string
   | Identifier of string
 type type_ =
-    TypeIdentifier
+    TypeIdentifier of string
   | TypeString
   | TypeBoolean
   | TypeNumber
@@ -48,4 +48,14 @@ type declaration =
   | Func of string * binding list * type_ option * instruction list
 type program_element = Stmt of instruction | Decl of declaration
 type program = program_element list
+val print_binopkind : binopkind -> unit
+val print_unopkind : unopkind -> unit
+val print_expression : expression -> unit
+val print_object_member : object_member -> unit
+val print_type_ : type_ -> unit
+val print_binding : string * type_ option * expression option -> unit
+val print_instruction : instruction -> unit
+val print_declaration : declaration -> unit
+val print_prog_elem : program_element -> unit
+val print_program : program_element list -> unit
 val read_whole_file : string -> string
