@@ -1,5 +1,5 @@
 ocamllex lexer.mll
-ocamlyacc -v --explain parser.mly
+ocamlyacc parser.mly
 ocamlc tpscrpt.mli -c
 ocamlc parser.mli -c
 ocamlc lexer.mli -c

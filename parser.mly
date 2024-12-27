@@ -3,10 +3,18 @@
 %token <int> T_INT_LIT
 %token <string> T_STR_LIT
 %token <string> T_IDENTIFIER
-%token T_NUMBER T_STRING T_BOOLEAN T_ANY T_IF T_ELSE T_WHILE T_RETURN T_LET T_VAR T_FUNCTION T_TYPEOF
-%token T_OPEN_PAR T_CLOSE_PAR T_OPEN_BRA T_CLOSE_BRA T_OPEN_SQR T_CLOSE_SQR T_COMMA T_DOT T_COLON T_SEMICOLON T_BAR
-%token T_PLUS T_MINUS T_MUL T_DIV T_LT T_LEQ T_GT T_GEQ T_EQUAL T_DIFF T_EQQ T_NEQQ T_AND T_OR T_ASSIGN T_NOT T_POW
+%token T_NUMBER T_STRING T_BOOLEAN T_ANY 
+%token T_IF T_ELSE T_WHILE T_RETURN T_LET T_VAR T_FUNCTION T_TYPEOF
+%token T_OPEN_PAR T_CLOSE_PAR T_OPEN_BRA T_CLOSE_BRA T_OPEN_SQR T_CLOSE_SQR 
+%token T_COMMA T_DOT T_COLON T_SEMICOLON T_BAR
+%token T_PLUS T_MINUS T_MUL T_DIV T_POW
+%token T_AND T_OR T_NOT
+%token T_LT T_LEQ T_GT T_GEQ T_EQUAL T_DIFF T_EQQ T_NEQQ
+%token T_ASSIGN
 %token EOL EOF
+
+%left T_BAR
+%nonassoc T_OPEN_SQR
 
 %type <Tpscrpt.program>             program
 %type <Tpscrpt.instruction>         instr
@@ -18,9 +26,9 @@
 %type <Tpscrpt.binding>             binding
 %type <Tpscrpt.binding list>        binding_list
 %type <Tpscrpt.binding list>        binding_list_empty
-%type <Tpscrpt.instruction option>  else_part
-%type <Tpscrpt.type_>               type_aux
+%type <Tpscrpt.instruction>         iff
 %type <Tpscrpt.type_>               type_
+%type <Tpscrpt.type_>               basic_type
 %type <Tpscrpt.type_ list>          union_type
 %type <Tpscrpt.type_ option>        type_opt
 %type <Tpscrpt.object_member>       object_member
@@ -40,18 +48,18 @@ compound:
   | T_OPEN_BRA T_CLOSE_BRA                              { Compound [] }
   | T_OPEN_BRA instr_list T_CLOSE_BRA                   { Compound $2 }
 
-else_part:
-  | T_ELSE instr                                        { Some $2 }
-  |                                                     { None }
-
 instr:
   | T_SEMICOLON                                         { Empty }
   | expr T_SEMICOLON                                    { Expr $1 }
   | compound                                            { $1 }
   | T_VAR binding_list T_SEMICOLON                      { VarDecl $2 }
-  | T_IF T_OPEN_PAR expr T_CLOSE_PAR instr else_part    { If ($3, $5, $6) }
   | T_WHILE T_OPEN_PAR expr T_CLOSE_PAR instr           { While ($3, $5) }
   | T_RETURN expr T_SEMICOLON                           { Return (Some $2) }
+  | iff T_SEMICOLON                                     { $1 } 
+
+iff:
+  | T_IF T_OPEN_PAR expr T_CLOSE_PAR instr T_ELSE instr { If ($3, $5, Some $7) }
+  | T_IF T_OPEN_PAR expr T_CLOSE_PAR instr              { If ($3, $5, None) }
 
 decl:
   | function { $1 }
@@ -73,7 +81,8 @@ instr_list_empty:
   |             { [] }
 
 binding:
-  | T_IDENTIFIER T_ASSIGN expr { $1, None, Some $3 }
+  | T_IDENTIFIER type_opt T_ASSIGN expr { $1, $2, Some $4 }
+  | T_IDENTIFIER type_opt               { $1, $2,  None }
 
 binding_list:
   | binding                       { [$1] }
@@ -84,21 +93,21 @@ binding_list_empty:
   |               { [] }
 
 union_type:
-  | type_ T_BAR union_type  { $1 :: $3 }
-  | type_                   { [$1] }
+  | union_type T_BAR basic_type { $3 :: $1 }
+  | basic_type T_BAR basic_type { [$1; $3] }
 
-type_aux:
+type_:
+  | basic_type                    { $1 }
+  | union_type                    { TypeUnion $1 }
+  | type_ T_OPEN_SQR T_CLOSE_SQR  { TypeTab $1 }
+
+basic_type:
   | T_IDENTIFIER                              { TypeIdentifier $1 }
   | T_NUMBER                                  { TypeNumber }
   | T_BOOLEAN                                 { TypeBoolean }
   | T_STRING                                  { TypeString }
   | T_ANY                                     { TypeAny }
-  | union_type                                { TypeUnion $1 }
   | T_OPEN_BRA object_member_list T_CLOSE_BRA { TypeObject $2 }
-
-type_:
-  | type_aux T_OPEN_SQR T_CLOSE_SQR { TypeTab $1 }
-  | type_aux                        { $1 }
 
 type_opt:
   | T_COLON type_ { Some $2 }
@@ -108,5 +117,6 @@ object_member:
   | T_IDENTIFIER T_COLON type_ { $1, $3 }
 
 object_member_list:
-  | object_member object_member_list { $1 :: $2 }
-  | object_member                    { [$1] }
+  | object_member T_COMMA object_member_list      { $1 :: $3 }
+  | object_member T_SEMICOLON object_member_list  { $1 :: $3 }
+  | object_member                                 { [$1] }

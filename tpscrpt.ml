@@ -63,6 +63,13 @@ type program_element =
 
 type program = program_element list
 
+
+let prt_aux f l =
+  let l2 = List.rev l in
+  let h = List.hd l2 in
+  let t = List.rev (List.tl l2) in
+  List.iter (fun x -> f x; Printf.printf ", ") t; f h
+
 let print_binopkind = function
   | BinOpPlus -> Printf.printf "BinOpPlus\n"
   | BinOpMinus -> Printf.printf "BinOpMinus\n"
@@ -103,13 +110,12 @@ and print_type_ = function
   | TypeNumber -> Printf.printf "TypeNumber"
   | TypeAny  -> Printf.printf "TypeAny"
   | TypeTab t -> Printf.printf "TypeTab("; print_type_ t; Printf.printf ")"
-  | TypeUnion   li -> Printf.printf "TypeUnion(["; List.iter (fun x -> print_type_ x; Printf.printf ", ") li; Printf.printf "])"
-  | TypeObject  li -> Printf.printf "TypeUnion(["; List.iter (fun x -> print_object_member x; Printf.printf ", ") li; Printf.printf "])"
+  | TypeUnion   li -> Printf.printf "TypeUnion(["; prt_aux print_type_ li; Printf.printf "])"
+  | TypeObject  li -> Printf.printf "TypeUnion(["; prt_aux print_object_member li; Printf.printf "])"
 
 let print_binding = 
   function
   (name, t, e) -> 
-    (
       Printf.printf "Binding(%s" name;
       let () = if t <> None then (
         Printf.printf ", Type=";
@@ -120,13 +126,12 @@ let print_binding =
         print_expression (Option.get e);
       ) in ();
       Printf.printf ")"
-    )
 
   let rec print_instruction = function
   | Empty -> Printf.printf "Empty"
   | Expr e -> Printf.printf "Expr("; print_expression (e); Printf.printf ")"
-  | Compound li -> Printf.printf "Compound(["; List.iter (fun x -> print_instruction x; Printf.printf ",") li ; Printf.printf "])"
-  | VarDecl li -> Printf.printf "VarDecl(["; List.iter (fun x -> print_binding x; Printf.printf ",") li; Printf.printf "])"
+  | Compound li -> Printf.printf "Compound(["; prt_aux print_instruction li; Printf.printf "])"
+  | VarDecl li -> Printf.printf "VarDecl(["; prt_aux print_binding li; Printf.printf "])"
   | If (e, iff, elze) -> 
     Printf.printf "If("; print_expression e; Printf.printf ", "; print_instruction iff; if elze <> None then ( Printf.printf ", "; print_instruction (Option.get elze)) else ()
 
@@ -135,14 +140,14 @@ let print_binding =
 
 let print_declaration = function
 | Alias (s, t) -> Printf.printf "Alias(%s, " s; print_type_ t; Printf.printf ")"
-| Let   li -> Printf.printf "Let(["; List.iter (fun x -> print_binding x; Printf.printf ", "; ) li; Printf.printf "])"
-| Const li -> Printf.printf "Const(["; List.iter (fun x -> print_binding x; Printf.printf ", "; ) li; Printf.printf "])"
+| Let   li -> Printf.printf "Let(["; prt_aux print_binding li; Printf.printf "])"
+| Const li -> Printf.printf "Const(["; prt_aux print_binding li; Printf.printf "])"
 | Func (name, bli, topt, ili) -> (
   Printf.printf "Func(%s, [" name;
-  List.iter (fun x -> print_binding x; Printf.printf ", ") bli;
+  prt_aux print_binding bli;
   if topt <> None then print_type_ (Option.get topt);
   Printf.printf "], [";
-  List.iter (fun x -> print_instruction x; Printf.printf ", ") ili;
+  prt_aux print_instruction ili;
   Printf.printf "])"
 )
 

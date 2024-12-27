@@ -1,3 +1,3 @@
-function a(): number {
+function a(v: number): number {
   return 1;
 }

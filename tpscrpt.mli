@@ -48,6 +48,7 @@ type declaration =
   | Func of string * binding list * type_ option * instruction list
 type program_element = Stmt of instruction | Decl of declaration
 type program = program_element list
+val prt_aux : ('a -> 'b) -> 'a list -> 'b
 val print_binopkind : binopkind -> unit
 val print_unopkind : unopkind -> unit
 val print_expression : expression -> unit
