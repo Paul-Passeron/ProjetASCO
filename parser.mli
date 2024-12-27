@@ -29,6 +29,10 @@ type token =
   | T_MINUS
   | T_MUL
   | T_DIV
+  | T_POW
+  | T_AND
+  | T_OR
+  | T_NOT
   | T_LT
   | T_LEQ
   | T_GT
@@ -37,11 +41,7 @@ type token =
   | T_DIFF
   | T_EQQ
   | T_NEQQ
-  | T_AND
-  | T_OR
   | T_ASSIGN
-  | T_NOT
-  | T_POW
   | EOL
   | EOF
 val yytransl_const : int array
