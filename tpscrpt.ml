@@ -145,8 +145,12 @@ let print_declaration = function
 | Func (name, bli, topt, ili) -> (
   Printf.printf "Func(%s, [" name;
   prt_aux print_binding bli;
-  if topt <> None then print_type_ (Option.get topt);
-  Printf.printf "], [";
+  Printf.printf "]";
+  if topt <> None then (
+    Printf.printf ", ";  
+    print_type_ (Option.get topt)
+  );
+  Printf.printf ", [";
   prt_aux print_instruction ili;
   Printf.printf "])"
 )

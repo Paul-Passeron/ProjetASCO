@@ -13,8 +13,9 @@
 %token T_ASSIGN
 %token EOL EOF
 
+// %nonassoc T_OPEN_SQR
+%left T_OPEN_SQR
 %left T_BAR
-%nonassoc T_OPEN_SQR
 
 %type <Tpscrpt.program>             program
 %type <Tpscrpt.instruction>         instr
@@ -97,9 +98,9 @@ union_type:
   | basic_type T_BAR basic_type { [$1; $3] }
 
 type_:
-  | basic_type                    { $1 }
-  | union_type                    { TypeUnion $1 }
-  | type_ T_OPEN_SQR T_CLOSE_SQR  { TypeTab $1 }
+  | basic_type                        { $1 }
+  | union_type                        { TypeUnion $1 }
+  | type_ T_OPEN_SQR T_CLOSE_SQR      { TypeTab $1 }
 
 basic_type:
   | T_IDENTIFIER                              { TypeIdentifier $1 }
@@ -108,6 +109,7 @@ basic_type:
   | T_STRING                                  { TypeString }
   | T_ANY                                     { TypeAny }
   | T_OPEN_BRA object_member_list T_CLOSE_BRA { TypeObject $2 }
+  | T_OPEN_PAR type_ T_CLOSE_PAR              { $2 }
 
 type_opt:
   | T_COLON type_ { Some $2 }

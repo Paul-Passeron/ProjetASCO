@@ -3,9 +3,7 @@ open Tpscrpt
 open Parser
 open Tpscrpt
 
-let () = Printf.printf "\nTokens:\n"
-let contents = read_whole_file "test.ts"
-let lexbuf = Lexing.from_string contents
+
 
 let print_token t = let () = match t with
 | T_INT_LIT d -> Printf.printf "T_INT_LIT %d" d
@@ -56,18 +54,17 @@ let print_token t = let () = match t with
 in Printf.printf "\n"
 
 let rec read l =
-  try (
-    let res = token lexbuf in
-    if res = EOF then () else (
+  try
+    let res = token l in
+    if res = EOF then () else
       let _ = print_token res in
       read l
-    )
-  ) with _ -> ()
+  with _ -> ()
 
+let () = Printf.printf "\nTokens:\n"
+let contents = read_whole_file "test.ts"
+let lexbuf = Lexing.from_string contents
 let _ = read lexbuf
-
 let () = Printf.printf "\nAst:\n"
-
 let lexbuf = Lexing.from_string contents 
-
 let () = program token lexbuf |> print_program
