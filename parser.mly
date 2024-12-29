@@ -1,5 +1,3 @@
-
-
 %token <int> T_INT_LIT
 %token <float> T_FLOAT_LIT
 %token <string> T_STR_LIT
@@ -63,9 +61,10 @@ program:
   | instr program { (Stmt $1) :: $2 }
   | decl program  { (Decl $1) :: $2 }
   | EOF           { [] }
+  | T_OPEN_BRA T_CLOSE_BRA program { Stmt (Compound []) :: $3 }
+
 
 compound:
-  | T_OPEN_BRA T_CLOSE_BRA                              { Compound [] }
   | T_OPEN_BRA instr_list T_CLOSE_BRA                   { Compound $2 }
 
 instr:
@@ -74,10 +73,10 @@ instr:
   | T_VAR binding_list T_SEMICOLON                      { VarDecl $2 }
   | T_WHILE T_OPEN_PAR expr T_CLOSE_PAR instr           { While ($3, $5) }
   | T_RETURN expr T_SEMICOLON                           { Return (Some $2) }
-   | T_RETURN T_SEMICOLON                           { Return None }
-  | expr T_SEMICOLON                                    { Expr $1 }
+  | T_RETURN T_SEMICOLON                                { Return None }
+  | expr_aux T_SEMICOLON                                { Expr $1 }
   | T_IF T_OPEN_PAR expr T_CLOSE_PAR instr T_ELSE instr { If ($3, $5, Some $7) }
-  | T_IF T_OPEN_PAR expr T_CLOSE_PAR instr %prec dummy { If ($3, $5, None) }
+  | T_IF T_OPEN_PAR expr T_CLOSE_PAR instr %prec dummy  { If ($3, $5, None) }
 
 
 decl:
@@ -98,18 +97,22 @@ object_expr_member_list:
   | object_expr_member T_COMMA object_expr_member_list  { $1 :: $3 }
   | object_expr_member T_COMMA                          { [$1] }
   | object_expr_member                                  { [$1] }
-
+  
 object_expr:
   | T_OPEN_BRA object_expr_member_list T_CLOSE_BRA  { Obj $2 }
 
 expr:
+  | T_OPEN_BRA T_CLOSE_BRA %prec dummy {Obj []}
+  | expr_aux { $1 }
+
+expr_aux:
   | T_INT_LIT                                       { IntConst $1 }
-  | T_FLOAT_LIT                                       { FloatConst $1 }
+  | T_FLOAT_LIT                                     { FloatConst $1 }
   | T_STR_LIT                                       { StringConst $1 }
   | T_BOOL_LIT {BoolConst $1}
   | object_expr                                     { $1 }
-  | unop {$1}
-  | binop {$1}
+  | unop                                            {$1}
+  | binop                                           {$1}
   | left_member                                     { LeftMember $1 }
   | T_OPEN_SQR tab_expr_list T_CLOSE_SQR            { Tab $2 }
   | left_member T_ASSIGN expr                       { Assign ($1, $3) } 
@@ -171,14 +174,13 @@ type_opt:
   |               { None }
 
 object_member:
-  | T_IDENTIFIER T_COLON type_ { $1, $3 }
-  | T_IDENTIFIER  { $1, TypeAny }
+  | T_IDENTIFIER T_COLON type_  { $1, $3 }
+  | T_IDENTIFIER                { $1, TypeAny }
 
 object_member_list:
   | object_member T_COMMA object_member_list      { $1 :: $3 }
   | object_member T_SEMICOLON object_member_list  { $1 :: $3 }
   | object_member                                 { [$1] }
-  |                                               { [] }
 
 unop: 
   | T_NOT expr     {Unary (UnOpNot, $2) }

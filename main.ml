@@ -145,9 +145,6 @@ let _ = read lexbuf
 let () = Printf.printf "\nAst:\n"
 let lexbuf = Lexing.from_string contents 
 let ast = program token lexbuf
-
 let () = print_program ast
-
 let () = Printf.printf "\nScope:\n"
-
 let () = Printf.printf "%s\n" (if check_scope ast then "true" else "false")

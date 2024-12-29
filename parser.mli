@@ -1,26 +1,26 @@
 type token =
   | T_INT_LIT of (
-# 3 "parser.mly"
+# 1 "parser.mly"
         int
 # 6 "parser.mli"
 )
   | T_FLOAT_LIT of (
-# 4 "parser.mly"
+# 2 "parser.mly"
         float
 # 11 "parser.mli"
 )
   | T_STR_LIT of (
-# 5 "parser.mly"
+# 3 "parser.mly"
         string
 # 16 "parser.mli"
 )
   | T_IDENTIFIER of (
-# 6 "parser.mly"
+# 4 "parser.mly"
         string
 # 21 "parser.mli"
 )
   | T_BOOL_LIT of (
-# 7 "parser.mly"
+# 5 "parser.mly"
         bool
 # 26 "parser.mli"
 )
