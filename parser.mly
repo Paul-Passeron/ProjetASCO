@@ -180,6 +180,8 @@ object_member:
 object_member_list:
   | object_member T_COMMA object_member_list      { $1 :: $3 }
   | object_member T_SEMICOLON object_member_list  { $1 :: $3 }
+  | object_member T_COMMA                         { [$1] }
+  | object_member T_SEMICOLON                     { [$1] }
   | object_member                                 { [$1] }
 
 unop: 
