@@ -15,11 +15,14 @@
 %token T_ASSIGN
 %token EOL EOF
 
+%nonassoc dummy
+
 %nonassoc T_ELSE
 
 %nonassoc T_OPEN_SQR
 %nonassoc T_BAR
 
+%left T_OPEN_PAR
 %right T_NOT T_TYPEOF
 %right T_POW
 %left T_MUL T_DIV
@@ -71,9 +74,10 @@ instr:
   | T_VAR binding_list T_SEMICOLON                      { VarDecl $2 }
   | T_WHILE T_OPEN_PAR expr T_CLOSE_PAR instr           { While ($3, $5) }
   | T_RETURN expr T_SEMICOLON                           { Return (Some $2) }
+   | T_RETURN T_SEMICOLON                           { Return None }
   | expr T_SEMICOLON                                    { Expr $1 }
   | T_IF T_OPEN_PAR expr T_CLOSE_PAR instr T_ELSE instr { If ($3, $5, Some $7) }
-  | T_IF T_OPEN_PAR expr T_CLOSE_PAR instr %prec T_ELSE { If ($3, $5, None) }
+  | T_IF T_OPEN_PAR expr T_CLOSE_PAR instr %prec dummy { If ($3, $5, None) }
 
 
 decl:
@@ -85,12 +89,14 @@ decl:
 tab_expr_list:
   | expr T_COMMA tab_expr_list  { $1 :: $3 }
   |                             { [] }
+  | expr                        { [$1] }
 
 object_expr_member:
   T_IDENTIFIER T_COLON expr { $1, $3 }
 
 object_expr_member_list:
   | object_expr_member T_COMMA object_expr_member_list  { $1 :: $3 }
+  | object_expr_member T_COMMA                          { [$1] }
   | object_expr_member                                  { [$1] }
 
 object_expr:
@@ -107,6 +113,7 @@ expr:
   | left_member                                     { LeftMember $1 }
   | T_OPEN_SQR tab_expr_list T_CLOSE_SQR            { Tab $2 }
   | left_member T_ASSIGN expr                       { Assign ($1, $3) } 
+  | expr T_OPEN_PAR tab_expr_list T_CLOSE_PAR       { Funcall ($1, $3) }
 
 left_member:
   | T_IDENTIFIER                      { Identifier $1 }
@@ -165,11 +172,13 @@ type_opt:
 
 object_member:
   | T_IDENTIFIER T_COLON type_ { $1, $3 }
+  | T_IDENTIFIER  { $1, TypeAny }
 
 object_member_list:
   | object_member T_COMMA object_member_list      { $1 :: $3 }
   | object_member T_SEMICOLON object_member_list  { $1 :: $3 }
   | object_member                                 { [$1] }
+  |                                               { [] }
 
 unop: 
   | T_NOT expr     {Unary (UnOpNot, $2) }
