@@ -82,8 +82,34 @@ type kind =
   | K_VAR
   | K_ASSIGN
   | K_FUN
+
+let rec is_cte exp = match exp with
+  | FloatConst  _
+  | StringConst _
+  | BoolConst   _
+  | IntConst _ -> true
+  | Assign _
+  | LeftMember _
+  | Funcall _ 
+  | Tab _ -> false
+  | Obj l -> List.for_all (fun (_, x) -> is_cte x) l
+  | Unary (_, e)-> is_cte e 
+  | Binary (a, _,  b) -> is_cte a && is_cte b
+
 let rec check_scope ast = 
-  let rec check_left_member l context kind = match l with 
+  let rec check_type_scope ast context = (
+    match ast with
+      | TypeIdentifier s -> is_type_in_context s context
+      | TypeBoolean
+      | TypeAny
+      | TypeNumber
+      | TypeObject _
+      | TypeString -> true
+      | TypeTab t -> check_type_scope t context
+      | TypeUnion l -> List.for_all (fun x -> check_type_scope x context) l
+      | TypeCte e  -> is_cte e
+  )
+  and check_left_member l context kind = match l with 
     | Identifier s -> (
       match kind with 
       | K_VAR -> is_decl_in_context s context
@@ -93,7 +119,6 @@ let rec check_scope ast =
     | Subscript (e, i) -> check_scope_expr e context kind && check_scope_expr i context K_VAR
     | Access (e, _) -> check_scope_expr e context kind
     | Expr e -> check_scope_expr e context kind
-
     and check_scope_expr e context kind = match e with
     | IntConst _ | FloatConst _ | StringConst _ | BoolConst _ -> true
     | Obj li -> List.for_all (fun (_, e) -> check_scope_expr e (context) kind) li 
@@ -112,7 +137,7 @@ in
       | Compound li -> check_scope_rec li context && check_scope_rec q context
       | VarDecl bl -> 
         let new_context = List.fold_right (fun (s, _, _) acc -> (Var s)::acc) bl context in
-        List.for_all(fun (_, _, e_opt) -> match e_opt with None -> true | Some e -> check_scope_expr e context K_VAR) bl && check_scope_rec q new_context
+        List.for_all(fun (_, t_opt, e_opt) -> (match e_opt with None -> true | Some e -> check_scope_expr e context K_VAR) && match t_opt with None -> true | Some t -> check_type_scope t context) bl && check_scope_rec q new_context
       | If (e, i, e_opt) -> check_scope_expr e context K_VAR && check_scope_rec [Stmt i] context && (if e_opt <> None then check_scope_rec [Stmt (Option.get e_opt)] context else true) && check_scope_rec q context
       | While (e, i) -> check_scope_expr e context K_VAR && check_scope_rec [Stmt i] context && check_scope_rec q context
       | Return e_opt -> (if e_opt <> None then check_scope_expr (Option.get e_opt) context K_VAR else true) && check_scope_rec q context
@@ -122,10 +147,10 @@ in
       | Alias (s, _) -> check_scope_rec q ((Type s) :: context)
       | Let li ->
         let new_context = List.fold_right (fun (s, _, _) acc -> (Var s)::acc) li context in
-        List.for_all(fun (_, _, e_opt) -> match e_opt with None -> true | Some e -> check_scope_expr e context K_VAR) li && check_scope_rec q new_context
+        List.for_all(fun (_, t_opt, e_opt) -> (match e_opt with None -> true | Some e -> check_scope_expr e context K_VAR) && match t_opt with None -> true | Some t -> check_type_scope t context) li && check_scope_rec q new_context
       | Const li -> 
         let new_context = List.fold_right (fun (s, _, _) acc -> (Const s)::acc) li context in
-        List.for_all(fun (_, _, e_opt) -> match e_opt with None -> true | Some e -> check_scope_expr e context K_VAR) li && check_scope_rec q new_context
+        List.for_all(fun (_, t_opt, e_opt) -> (match e_opt with None -> true | Some e -> check_scope_expr e context K_VAR) && match t_opt with None -> true | Some t -> check_type_scope t context) li && check_scope_rec q new_context
       | Func (id, pli, t_opt, ili) -> 
         let added = (Function id)::context in
         let new_context = (List.fold_right (fun (s, _, _) acc -> (Function s)::acc) pli added) in
