@@ -8,6 +8,7 @@ open Tpscrpt
 let print_token t = let () = match t with
 | T_INT_LIT d -> Printf.printf "T_INT_LIT %d" d
 | T_STR_LIT s -> Printf.printf "T_STR_LIT %s" s
+| T_BOOL_LIT b -> Printf.printf "T_STR_LIT %s" (if b then "true" else "false")
 | T_IDENTIFIER s -> Printf.printf "T_IDENTIFIER %s" s
 | T_NUMBER -> Printf.printf "T_NUMBER"
 | T_STRING -> Printf.printf "T_STRING"
@@ -40,7 +41,7 @@ let print_token t = let () = match t with
 | T_LEQ -> Printf.printf "T_LEQ"
 | T_GT -> Printf.printf "T_GT"
 | T_GEQ -> Printf.printf "T_GEQ"
-| T_EQUAL -> Printf.printf "T_EQUAL"
+| T_EQ -> Printf.printf "T_EQUAL"
 | T_DIFF -> Printf.printf "T_DIFF"
 | T_EQQ -> Printf.printf "T_EQQ"
 | T_NEQQ -> Printf.printf "T_NEQQ"
@@ -51,6 +52,9 @@ let print_token t = let () = match t with
 | T_POW -> Printf.printf "T_POW"
 | EOL -> Printf.printf "EOL"
 | EOF -> Printf.printf "EOF"
+| T_FLOAT_LIT f -> Printf.printf "T_FLOAT_LIT %f" f
+| T_TYPE -> Printf.printf "T_TYPE"
+| T_CONST -> Printf.printf "T_CONST"
 in Printf.printf "\n"
 
 let rec read l =

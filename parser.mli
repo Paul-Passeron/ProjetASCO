@@ -1,11 +1,34 @@
 type token =
-    T_INT_LIT of int
-  | T_STR_LIT of string
-  | T_IDENTIFIER of string
+  | T_INT_LIT of (
+# 3 "parser.mly"
+        int
+# 6 "parser.mli"
+)
+  | T_FLOAT_LIT of (
+# 4 "parser.mly"
+        float
+# 11 "parser.mli"
+)
+  | T_STR_LIT of (
+# 5 "parser.mly"
+        string
+# 16 "parser.mli"
+)
+  | T_IDENTIFIER of (
+# 6 "parser.mly"
+        string
+# 21 "parser.mli"
+)
+  | T_BOOL_LIT of (
+# 7 "parser.mly"
+        bool
+# 26 "parser.mli"
+)
   | T_NUMBER
   | T_STRING
   | T_BOOLEAN
   | T_ANY
+  | T_TYPE
   | T_IF
   | T_ELSE
   | T_WHILE
@@ -14,6 +37,7 @@ type token =
   | T_VAR
   | T_FUNCTION
   | T_TYPEOF
+  | T_CONST
   | T_OPEN_PAR
   | T_CLOSE_PAR
   | T_OPEN_BRA
@@ -37,27 +61,13 @@ type token =
   | T_LEQ
   | T_GT
   | T_GEQ
-  | T_EQUAL
+  | T_EQ
   | T_DIFF
   | T_EQQ
   | T_NEQQ
   | T_ASSIGN
   | EOL
   | EOF
-val yytransl_const : int array
-val yytransl_block : int array
-val yylhs : string
-val yylen : string
-val yydefred : string
-val yydgoto : string
-val yysindex : string
-val yyrindex : string
-val yygindex : string
-val yytablesize : int
-val yytable : string
-val yycheck : string
-val yynames_const : string
-val yynames_block : string
-val yyact : (Parsing.parser_env -> Obj.t) array
-val yytables : Parsing.parse_tables
-val program : (Lexing.lexbuf -> token) -> Lexing.lexbuf -> Tpscrpt.program
+
+val program :
+  (Lexing.lexbuf  -> token) -> Lexing.lexbuf -> Tpscrpt.program
