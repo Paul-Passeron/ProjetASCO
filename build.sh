@@ -1,3 +1,5 @@
+eval $(opam env)
+
 ocamllex lexer.mll
 ocamlyacc -v parser.mly
 ocamlc tpscrpt.mli -c

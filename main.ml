@@ -65,10 +65,63 @@ let rec read l =
       read l
   with _ -> ()
 
+let rec check_scope ast = 
+  let rec check_left_member l context = match l with 
+    | Identifier s -> List.mem s context
+    | Subscript (e, i) -> check_scope_expr e context && check_scope_expr i context
+    | Access (e, _) -> check_scope_expr e context
+    | Expr e -> check_scope_expr e context
+
+    and check_scope_expr e context = match e with
+    | IntConst _ | FloatConst _ | StringConst _ | BoolConst _ -> true
+    | Obj li -> List.for_all (fun (_, e) -> check_scope_expr e (context)) li
+    | Tab li -> List.for_all (fun x-> check_scope_expr x context) li
+    | Funcall (e, li) -> check_scope_expr e context && List.for_all (fun e -> check_scope_expr e context) li
+    | Unary (_, e) -> check_scope_expr e context
+    | Binary (a, _, b) -> check_scope_expr a context && check_scope_expr b context
+    | LeftMember l -> check_left_member l context
+    | Assign (l, e) -> check_scope_expr e context && check_left_member l context
+in
+  let rec check_scope_rec ast context = match ast with
+    | (Stmt s) :: q -> (
+      match s with
+      | Empty -> check_scope_rec q context
+      | Expr e -> check_scope_expr e context
+      | Compound li -> check_scope_rec li context && check_scope_rec q context
+      | VarDecl bl -> 
+        let new_context = List.fold_right (fun (s, _, _) acc -> s::acc) bl context in
+        List.for_all(fun (_, _, e_opt) -> match e_opt with None -> true | Some e -> check_scope_expr e context) bl && check_scope_rec q new_context
+      | If (e, i, e_opt) -> check_scope_expr e context && check_scope_rec [Stmt i] context && (if e_opt <> None then check_scope_rec [Stmt (Option.get e_opt)] context else true) && check_scope_rec q context
+      | While (e, i) -> check_scope_expr e context && check_scope_rec [Stmt i] context && check_scope_rec q context
+      | Return e_opt -> (if e_opt <> None then check_scope_expr (Option.get e_opt) context else true) && check_scope_rec q context
+    ) 
+    | (Decl d) :: q -> ( 
+      match d with
+      | Alias _ -> check_scope_rec q context
+      | Let li | Const li -> 
+        let new_context = List.fold_right (fun (s, _, _) acc -> s::acc) li context in
+        List.for_all(fun (_, _, e_opt) -> match e_opt with None -> true | Some e -> check_scope_expr e context) li && check_scope_rec q new_context
+      | Func (id, pli, t_opt, ili) -> 
+        let new_context = id :: (List.fold_right (fun (s, _, _) acc -> s::acc) pli context) in
+        check_scope_rec ili new_context && check_scope_rec q (id::context)
+    )
+    | [] -> true
+
+   in
+  check_scope_rec ast []
+
+
+
 let () = Printf.printf "\nTokens:\n"
 let contents = read_whole_file "test.ts"
 let lexbuf = Lexing.from_string contents
 let _ = read lexbuf
 let () = Printf.printf "\nAst:\n"
 let lexbuf = Lexing.from_string contents 
-let () = program token lexbuf |> print_program
+let ast = program token lexbuf
+
+let () = print_program ast
+
+let () = Printf.printf "\nScope:\n"
+
+let () = Printf.printf "%s\n" (if check_scope ast then "true" else "false")
