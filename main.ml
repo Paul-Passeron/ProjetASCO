@@ -65,45 +65,71 @@ let rec read l =
       read l
   with _ -> ()
 
-let rec check_scope ast = 
-  let rec check_left_member l context = match l with 
-    | Identifier s -> List.mem s context
-    | Subscript (e, i) -> check_scope_expr e context && check_scope_expr i context
-    | Access (e, _) -> check_scope_expr e context
-    | Expr e -> check_scope_expr e context
 
-    and check_scope_expr e context = match e with
+type cont_elem =
+  | Function of string
+  | Var      of string
+  | Const    of string
+  | Type     of string
+  
+let is_function_in_context e l = List.exists (fun x -> match x with Function s -> s = e | _ -> false) l
+let is_var_in_context e l = List.exists (fun x -> match x with Var s -> s = e | _ -> false) l
+let is_const_in_context e l = List.exists (fun x -> match x with Const s -> s = e | _ -> false) l
+let is_type_in_context e l = List.exists (fun x -> match x with Type s -> s = e | _ -> false) l
+let is_decl_in_context e l = List.exists (fun x -> match x with Var s | Const s -> s = e | _ -> false) l
+
+type kind = 
+  | K_VAR
+  | K_ASSIGN
+  | K_FUN
+let rec check_scope ast = 
+  let rec check_left_member l context kind = match l with 
+    | Identifier s -> (
+      match kind with 
+      | K_VAR -> is_decl_in_context s context
+      | K_ASSIGN -> is_var_in_context s context
+      | K_FUN -> is_function_in_context s context
+    )
+    | Subscript (e, i) -> check_scope_expr e context kind && check_scope_expr i context K_VAR
+    | Access (e, _) -> check_scope_expr e context kind
+    | Expr e -> check_scope_expr e context kind
+
+    and check_scope_expr e context kind = match e with
     | IntConst _ | FloatConst _ | StringConst _ | BoolConst _ -> true
-    | Obj li -> List.for_all (fun (_, e) -> check_scope_expr e (context)) li
-    | Tab li -> List.for_all (fun x-> check_scope_expr x context) li
-    | Funcall (e, li) -> check_scope_expr e context && List.for_all (fun e -> check_scope_expr e context) li
-    | Unary (_, e) -> check_scope_expr e context
-    | Binary (a, _, b) -> check_scope_expr a context && check_scope_expr b context
-    | LeftMember l -> check_left_member l context
-    | Assign (l, e) -> check_scope_expr e context && check_left_member l context
+    | Obj li -> List.for_all (fun (_, e) -> check_scope_expr e (context) kind) li 
+    | Tab li -> List.for_all (fun x-> check_scope_expr x context kind) li 
+    | Funcall (e, li) -> check_scope_expr e context K_FUN && List.for_all (fun e -> check_scope_expr e context K_VAR) li
+    | Unary (_, e) -> check_scope_expr e context kind
+    | Binary (a, _, b) -> check_scope_expr a context kind && check_scope_expr b context kind
+    | LeftMember l -> check_left_member l context kind
+    | Assign (l, e) -> check_scope_expr e context kind && check_left_member l context K_ASSIGN
 in
   let rec check_scope_rec ast context = match ast with
     | (Stmt s) :: q -> (
       match s with
       | Empty -> check_scope_rec q context
-      | Expr e -> check_scope_expr e context
+      | Expr e -> check_scope_expr e context K_VAR && check_scope_rec q context
       | Compound li -> check_scope_rec li context && check_scope_rec q context
       | VarDecl bl -> 
-        let new_context = List.fold_right (fun (s, _, _) acc -> s::acc) bl context in
-        List.for_all(fun (_, _, e_opt) -> match e_opt with None -> true | Some e -> check_scope_expr e context) bl && check_scope_rec q new_context
-      | If (e, i, e_opt) -> check_scope_expr e context && check_scope_rec [Stmt i] context && (if e_opt <> None then check_scope_rec [Stmt (Option.get e_opt)] context else true) && check_scope_rec q context
-      | While (e, i) -> check_scope_expr e context && check_scope_rec [Stmt i] context && check_scope_rec q context
-      | Return e_opt -> (if e_opt <> None then check_scope_expr (Option.get e_opt) context else true) && check_scope_rec q context
+        let new_context = List.fold_right (fun (s, _, _) acc -> (Var s)::acc) bl context in
+        List.for_all(fun (_, _, e_opt) -> match e_opt with None -> true | Some e -> check_scope_expr e context K_VAR) bl && check_scope_rec q new_context
+      | If (e, i, e_opt) -> check_scope_expr e context K_VAR && check_scope_rec [Stmt i] context && (if e_opt <> None then check_scope_rec [Stmt (Option.get e_opt)] context else true) && check_scope_rec q context
+      | While (e, i) -> check_scope_expr e context K_VAR && check_scope_rec [Stmt i] context && check_scope_rec q context
+      | Return e_opt -> (if e_opt <> None then check_scope_expr (Option.get e_opt) context K_VAR else true) && check_scope_rec q context
     ) 
     | (Decl d) :: q -> ( 
       match d with
-      | Alias _ -> check_scope_rec q context
-      | Let li | Const li -> 
-        let new_context = List.fold_right (fun (s, _, _) acc -> s::acc) li context in
-        List.for_all(fun (_, _, e_opt) -> match e_opt with None -> true | Some e -> check_scope_expr e context) li && check_scope_rec q new_context
+      | Alias (s, _) -> check_scope_rec q ((Type s) :: context)
+      | Let li ->
+        let new_context = List.fold_right (fun (s, _, _) acc -> (Var s)::acc) li context in
+        List.for_all(fun (_, _, e_opt) -> match e_opt with None -> true | Some e -> check_scope_expr e context K_VAR) li && check_scope_rec q new_context
+      | Const li -> 
+        let new_context = List.fold_right (fun (s, _, _) acc -> (Const s)::acc) li context in
+        List.for_all(fun (_, _, e_opt) -> match e_opt with None -> true | Some e -> check_scope_expr e context K_VAR) li && check_scope_rec q new_context
       | Func (id, pli, t_opt, ili) -> 
-        let new_context = id :: (List.fold_right (fun (s, _, _) acc -> s::acc) pli context) in
-        check_scope_rec ili new_context && check_scope_rec q (id::context)
+        let added = (Function id)::context in
+        let new_context = (List.fold_right (fun (s, _, _) acc -> (Function s)::acc) pli added) in
+        check_scope_rec ili new_context && check_scope_rec q added
     )
     | [] -> true
 

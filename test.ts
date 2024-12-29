@@ -1,4 +1,4 @@
-var b;
 function a(){
+  b = 7;
   return b;
 }
