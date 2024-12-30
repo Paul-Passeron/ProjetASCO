@@ -336,39 +336,41 @@ and get_return_type f context =
   | Some (Fun (_, t)) -> t
   | _ -> failwith ("No function " ^ f)
 
+let rec print_type t ctx =
+  match t with
+  | TypeNumber -> Printf.printf "number"
+  | TypeString -> Printf.printf "string"
+  | TypeBoolean -> Printf.printf "bool"
+  | TypeAny -> Printf.printf "any"
+  | TypeTab t' ->
+      print_type t' ctx;
+      Printf.printf "[]"
+  | TypeObject li ->
+      Printf.printf "{";
+      prt_aux
+        (fun (s, t') ->
+          Printf.printf " %s: " s;
+          print_type t' ctx)
+        li;
+      Printf.printf "}"
+  | TypeUnion l ->
+      let hd = List.hd l in
+      let tl = List.tl l in
+      print_type hd ctx;
+      List.iter
+        (fun x ->
+          Printf.printf " | ";
+          print_type x ctx)
+        tl
+  | TypeCte e ->
+      let t = get_typeof e ctx in
+      print_type t ctx
+  | TypeIdentifier s -> print_type (get_type_from_name s ctx) ctx
+
 let check_type ast =
   let current_return_type = ref None in
-  let rec print_type t ctx =
-    match t with
-    | TypeNumber -> Printf.printf "number"
-    | TypeString -> Printf.printf "string"
-    | TypeBoolean -> Printf.printf "bool"
-    | TypeAny -> Printf.printf "any"
-    | TypeTab t' ->
-        print_type t' ctx;
-        Printf.printf "[]"
-    | TypeObject li ->
-        Printf.printf "{";
-        prt_aux
-          (fun (s, t') ->
-            Printf.printf " %s: " s;
-            print_type t' ctx)
-          li;
-        Printf.printf "}"
-    | TypeUnion l ->
-        let hd = List.hd l in
-        let tl = List.tl l in
-        print_type hd ctx;
-        List.iter
-          (fun x ->
-            Printf.printf " | ";
-            print_type x ctx)
-          tl
-    | TypeCte e ->
-        let t = get_typeof e ctx in
-        print_type t ctx
-    | TypeIdentifier s -> print_type (get_type_from_name s ctx) ctx
-  and check_type_rec ast ctx =
+
+  let rec check_type_rec ast ctx =
     match ast with
     | [] -> true
     | Stmt stmt :: q -> (
@@ -512,6 +514,66 @@ let check_type ast =
   in
   check_type_rec ast []
 
+let rec transpile ast =
+  match ast with
+  | Stmt Empty :: q -> ";\n" ^ transpile q
+  | Stmt (VarDecl li) :: q ->
+      let l =
+        List.map
+          (fun (s, _, eopt) ->
+            "var " ^ s
+            ^ (if eopt = None then ""
+               else
+                 let e = Option.get eopt in
+                 " = " ^ trans_expr e)
+            ^ ";\n")
+          li
+      in
+      List.fold_right ( ^ ) l "" ^ transpile q
+  | Stmt (Expr e) :: q -> trans_expr e ^ ";\n" ^ transpile q
+  | Stmt (If (e, s1, s2)) :: q ->
+      "if (" ^ trans_expr e ^ ")\n" ^ transpile [ Stmt s1 ]
+      ^ (if s2 <> None then "else\n" ^ transpile [ Stmt (Option.get s2) ]
+         else "")
+      ^ transpile q
+  | Stmt (Return e) :: q ->
+      "return "
+      ^ (if e <> None then trans_expr (Option.get e) else "")
+      ^ ";\n" ^ transpile q
+  | Stmt (Compound li) :: q -> "{" ^ transpile li ^ "}" ^ transpile q
+  | [] -> ""
+  | _ -> "TODO"
+
+and trans_expr e =
+  match e with
+  | IntConst i -> string_of_int i
+  | FloatConst f -> string_of_float f
+  | StringConst s -> "\"" ^ s ^ "\""
+  | BoolConst b -> string_of_bool b
+  | Obj li ->
+      "{"
+      ^ List.fold_right ( ^ )
+          (List.map (fun (s, e) -> s ^ ": " ^ trans_expr e ^ ", ") li)
+          ""
+      ^ "}"
+  | Tab t ->
+      "["
+      ^ List.fold_right ( ^ ) (List.map (fun e -> trans_expr e ^ ", ") t) ""
+      ^ "]"
+  | LeftMember lm -> trans_lm lm
+  | Funcall (e, li) ->
+      trans_expr e ^ "("
+      ^ List.fold_right ( ^ ) (List.map (fun e -> trans_expr e ^ ", ") li) ""
+      ^ ")"
+  | _ -> "TODO "
+
+and trans_lm lm =
+  match lm with
+  | Identifier s -> s
+  | Subscript (e, i) -> trans_expr e ^ "[" ^ trans_expr i ^ "]"
+  | Access (e, id) -> trans_expr e ^ "." ^ id
+  | Expr e -> trans_expr e
+
 let () = Printf.printf "\nTokens:\n"
 let contents = read_whole_file "test.ts"
 let lexbuf = Lexing.from_string contents
@@ -524,3 +586,5 @@ let () = Printf.printf "\nScope:\n"
 let () = Printf.printf "%s\n" (if check_scope ast then "true" else "false")
 let () = Printf.printf "\nType:\n"
 let () = Printf.printf "%s\n" (if check_type ast then "true" else "false")
+let () = Printf.printf "\nJavaScript:\n\n"
+let () = Printf.printf "%s\n" (transpile ast)
