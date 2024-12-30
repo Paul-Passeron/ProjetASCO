@@ -72,11 +72,11 @@ type cont_elem =
   | Const    of string
   | Type     of string
   
-let is_function_in_context e l = List.exists (fun x -> match x with Function s -> s = e | _ -> false) l
-let is_var_in_context e l = List.exists (fun x -> match x with Var s -> s = e | _ -> false) l
+let is_function_in_context e l = let res = List.exists (fun x -> match x with Function s -> s = e | _ -> false) l in if not res then Printf.printf "Error: %s is not a function in this context\n" e; res
+let is_var_in_context e l = let res =  List.exists (fun x -> match x with Var s -> s = e | _ -> false) l in if not res then Printf.printf "Error: mutable variable %s not in context\n" e; res
 let is_const_in_context e l = List.exists (fun x -> match x with Const s -> s = e | _ -> false) l
-let is_type_in_context e l = List.exists (fun x -> match x with Type s -> s = e | _ -> false) l
-let is_decl_in_context e l = List.exists (fun x -> match x with Var s | Const s -> s = e | _ -> false) l
+let is_type_in_context e l = let res = List.exists (fun x -> match x with Type s -> s = e | _ -> false) l in if not res then Printf.printf "Error: type %s not in context\n" e; res
+let is_decl_in_context e l = let res = List.exists (fun x -> match x with Var s | Const s -> s = e | _ -> false) l in if not res then Printf.printf "Error: %s is not defined in this context\n" e; res
 
 type kind = 
   | K_VAR
@@ -153,7 +153,7 @@ in
         List.for_all(fun (_, t_opt, e_opt) -> (match e_opt with None -> true | Some e -> check_scope_expr e context K_VAR) && match t_opt with None -> true | Some t -> check_type_scope t context) li && check_scope_rec q new_context
       | Func (id, pli, t_opt, ili) -> 
         let added = (Function id)::context in
-        let new_context = (List.fold_right (fun (s, _, _) acc -> (Function s)::acc) pli added) in
+        let new_context = (List.fold_right (fun (s, _, _) acc -> (Var s)::acc) pli added) in
         check_scope_rec ili new_context && check_scope_rec q added
     )
     | [] -> true
