@@ -9,6 +9,7 @@ let _ =
       "number",   T_NUMBER;
       "string",   T_STRING;
       "boolean",  T_BOOLEAN;
+      "any",      T_ANY;
       "if",       T_IF;
       "else",     T_ELSE;
       "while",    T_WHILE;
