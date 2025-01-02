@@ -243,7 +243,9 @@ let rec has_field s t context =
   match t with
   | TypeBoolean | TypeAny | TypeTab _ | TypeNumber | TypeString -> false
   | TypeCte exp -> has_field s (get_typeof exp context) context
-  | TypeIdentifier name -> has_field s (get_type_of_var name context) context
+  | TypeIdentifier name ->
+      Printf.printf "Here ??\n";
+      has_field s (get_type_of_var name context) context
   | TypeUnion li -> List.for_all (fun t -> has_field s t context) li
   | TypeObject li -> List.exists (fun (name, _) -> name = s) li
 
@@ -264,7 +266,40 @@ and get_typeof exp context =
         (match types with [] -> TypeAny | [ t ] -> t | _ -> TypeUnion types)
   | Funcall (f, _) -> get_return_type (get_function_name f) context
   | Unary (_, e) -> get_typeof e context
-  | Binary (a, _, b) -> get_typeof a context
+  | Binary (a, _, b) ->
+      let t1 = get_typeof a context in
+      let t2 = get_typeof b context in
+      if is_type_sub_type t1 t2 context then t2
+      else if is_type_sub_type t2 t1 context then t1
+      else if t1 <> TypeNumber then t1
+      else t2
+  | LeftMember lm -> get_typeof_left lm context
+  | Assign (lm, e) -> get_typeof e context
+
+and get_typeof_verbose exp context =
+  match exp with
+  | FloatConst _ | IntConst _ -> TypeNumber
+  | StringConst _ -> TypeString
+  | BoolConst _ -> TypeBoolean
+  | Obj li -> TypeObject (List.map (fun (s, e) -> (s, get_typeof e context)) li)
+  | Tab li ->
+      let types = uniq (List.map (fun e -> get_typeof e context) li) in
+      TypeTab
+        (match types with [] -> TypeAny | [ t ] -> t | _ -> TypeUnion types)
+  | Funcall (f, _) -> get_return_type (get_function_name f) context
+  | Unary (_, e) -> get_typeof e context
+  | Binary (a, _, b) ->
+      let t1 = get_typeof a context in
+      let t2 = get_typeof b context in
+      if is_type_sub_type t1 t2 context then t2
+      else if is_type_sub_type t2 t1 context then t1
+      else (
+        Printf.printf "Warning: incompatible types ";
+        print_type t1 context;
+        Printf.printf " and ";
+        print_type t2 context;
+        Printf.printf " in binop.\n";
+        TypeString)
   | LeftMember lm -> get_typeof_left lm context
   | Assign (lm, e) -> get_typeof e context
 
@@ -308,7 +343,7 @@ and get_type_of_field t s context =
 
 and get_typeof_left exp context =
   match exp with
-  | Identifier s -> get_type_from_name s context
+  | Identifier s -> get_type_of_var s context
   | Subscript (e, _) -> tab_lower (get_typeof e context) context
   | Access (e, s) -> get_type_of_field (get_typeof e context) s context
   | Expr e -> get_typeof e context
@@ -336,133 +371,11 @@ and get_return_type f context =
   | Some (Fun (_, t)) -> t
   | _ -> failwith ("No function " ^ f)
 
-let rec print_type t ctx =
-  match t with
-  | TypeNumber -> Printf.printf "number"
-  | TypeString -> Printf.printf "string"
-  | TypeBoolean -> Printf.printf "bool"
-  | TypeAny -> Printf.printf "any"
-  | TypeTab t' ->
-      print_type t' ctx;
-      Printf.printf "[]"
-  | TypeObject li ->
-      Printf.printf "{";
-      prt_aux
-        (fun (s, t') ->
-          Printf.printf " %s: " s;
-          print_type t' ctx)
-        li;
-      Printf.printf "}"
-  | TypeUnion l ->
-      let hd = List.hd l in
-      let tl = List.tl l in
-      print_type hd ctx;
-      List.iter
-        (fun x ->
-          Printf.printf " | ";
-          print_type x ctx)
-        tl
-  | TypeCte e ->
-      let t = get_typeof e ctx in
-      print_type t ctx
-  | TypeIdentifier s -> print_type (get_type_from_name s ctx) ctx
+and is_sub_type e t context = is_type_sub_type (get_typeof e context) t context
 
-let check_type ast =
-  let current_return_type = ref None in
-
-  let rec check_type_rec ast ctx =
-    match ast with
-    | [] -> true
-    | Stmt stmt :: q -> (
-        match stmt with
-        | Empty -> check_type_rec q ctx
-        | Expr e -> is_sub_type e TypeAny ctx
-        | Compound li -> check_type_rec li ctx && check_type_rec q ctx
-        | VarDecl bli ->
-            let new_context =
-              List.fold_right
-                (fun (s, t, _) acc ->
-                  (if t <> None then Var (s, Option.get t) else Var (s, TypeAny))
-                  :: acc)
-                bli ctx
-            in
-            List.for_all
-              (fun (s, t, eopt) ->
-                let ty = if t <> None then Option.get t else TypeAny in
-                if eopt <> None then
-                  is_sub_type (Option.get eopt) ty new_context
-                else true)
-              bli
-            && check_type_rec q new_context
-        | If (e, s, e2) ->
-            check_type_rec [ Stmt s ] ctx
-            &&
-            if e2 <> None then check_type_rec [ Stmt (Option.get e2) ] ctx
-            else true
-        | Return e ->
-            if e = None then
-              if !current_return_type = None then (
-                Printf.printf "Type Error: returning outside of function.\n";
-                false)
-              else !current_return_type = Some TypeAny
-            else if !current_return_type <> None then
-              if
-                is_sub_type (Option.get e) (Option.get !current_return_type) ctx
-              then true
-              else (
-                Printf.printf "Type Error: expected return type ";
-                print_type (Option.get !current_return_type) ctx;
-                Printf.printf " but got ";
-                print_type (get_typeof (Option.get e) ctx) ctx;
-                Printf.printf "\n";
-                false)
-            else (
-              Printf.printf "Type Error: returning outside of function.\n";
-              false)
-        | _ -> true)
-    | Decl decl :: q -> (
-        match decl with
-        | Alias (s, t) -> check_type_rec q (Alias (s, t) :: ctx)
-        | Const bli | Let bli ->
-            let new_context =
-              List.fold_right
-                (fun (s, t, _) acc ->
-                  (if t <> None then Var (s, Option.get t) else Var (s, TypeAny))
-                  :: acc)
-                bli ctx
-            in
-            List.for_all
-              (fun (s, t, eopt) ->
-                let ty = if t <> None then Option.get t else TypeAny in
-                if eopt <> None then
-                  is_sub_type (Option.get eopt) ty new_context
-                else true)
-              bli
-            && check_type_rec q new_context
-        | Func (name, bli, topt, li) ->
-            let old_ret_type = !current_return_type in
-            if topt <> None then current_return_type := Some (Option.get topt)
-            else current_return_type := Some TypeAny;
-            let new_context1 =
-              Fun (name, if topt = None then TypeAny else Option.get topt)
-              :: ctx
-            in
-            let new_context2 =
-              List.fold_right
-                (fun (s, t, _) acc ->
-                  (if t <> None then Var (s, Option.get t) else Var (s, TypeAny))
-                  :: acc)
-                bli new_context1
-            in
-            let res1 = check_type_rec li new_context2 in
-            current_return_type := old_ret_type;
-            res1 && check_type_rec q new_context1)
-  and is_sub_type e t context =
-    if t = TypeAny then true
-    else
-      let t2 = get_typeof e context in
-      is_type_sub_type t2 t context
-  and is_type_sub_type t1 t2 context =
+and is_type_sub_type t1 t2 context =
+  if t1 = t2 then true
+  else
     match t2 with
     | TypeAny -> true
     | TypeCte e ->
@@ -511,6 +424,131 @@ let check_type ast =
                          l2)
                      li
             | _ -> false))
+
+and print_type t ctx =
+  match t with
+  | TypeNumber -> Printf.printf "number"
+  | TypeString -> Printf.printf "string"
+  | TypeBoolean -> Printf.printf "bool"
+  | TypeAny -> Printf.printf "any"
+  | TypeTab t' ->
+      print_type t' ctx;
+      Printf.printf "[]"
+  | TypeObject li ->
+      Printf.printf "{";
+      prt_aux
+        (fun (s, t') ->
+          Printf.printf " %s: " s;
+          print_type t' ctx)
+        li;
+      Printf.printf "}"
+  | TypeUnion l ->
+      let hd = List.hd l in
+      let tl = List.tl l in
+      print_type hd ctx;
+      List.iter
+        (fun x ->
+          Printf.printf " | ";
+          print_type x ctx)
+        tl
+  | TypeCte e ->
+      let t = get_typeof e ctx in
+      print_type t ctx
+  | TypeIdentifier s -> print_type (get_type_from_name s ctx) ctx
+
+let check_type ast =
+  let current_return_type = ref None in
+  let rec handle_vars bli ctx q =
+    let new_context = add_bindings_to_context bli ctx in
+    List.for_all (fun x -> check_binding x ctx) bli
+    && check_type_rec q new_context
+  and add_bindings_to_context bli ctx =
+    List.fold_right
+      (fun (s, t, eopt) acc ->
+        (if t <> None then Var (s, Option.get t)
+         else if eopt = None then Var (s, TypeAny)
+         else Var (s, get_typeof_verbose (Option.get eopt) ctx))
+        :: acc)
+      bli ctx
+  and check_binding (_, topt, eopt) ctx =
+    if eopt = None then (
+      if topt = None then true
+      else
+        let r = is_type_sub_type (Option.get topt) TypeAny ctx in
+        if not r then (
+          Printf.printf "Type Eroor: Invalid type ";
+          print_type (Option.get topt) ctx;
+          Printf.printf "\n");
+        r)
+    else
+      let ty = if topt = None then TypeAny else Option.get topt in
+      let e_type = get_typeof (Option.get eopt) ctx in
+      let r = is_type_sub_type e_type ty ctx in
+      if not r then (
+        Printf.printf "Type Error: Incompatible types ";
+        print_type ty ctx;
+        Printf.printf " and ";
+        print_type e_type ctx;
+        Printf.printf " in binding.\n");
+      r
+  and check_type_rec ast ctx =
+    match ast with
+    | [] -> true
+    | Stmt stmt :: q -> (
+        match stmt with
+        | Empty -> check_type_rec q ctx
+        | Expr e -> is_type_sub_type (get_typeof_verbose e ctx) TypeAny ctx
+        | Compound li -> check_type_rec li ctx && check_type_rec q ctx
+        | VarDecl bli -> handle_vars bli ctx q
+        | If (e, s, e2) ->
+            check_type_rec [ Stmt s ] ctx
+            &&
+            if e2 <> None then check_type_rec [ Stmt (Option.get e2) ] ctx
+            else true
+        | Return e ->
+            (if e <> None then
+               let _ = get_typeof_verbose (Option.get e) ctx in
+               ());
+            if e = None then
+              if !current_return_type = None then (
+                Printf.printf "Type Error: returning outside of function.\n";
+                false)
+              else !current_return_type = Some TypeAny
+            else if !current_return_type <> None then
+              if
+                is_type_sub_type
+                  (get_typeof (Option.get e) ctx)
+                  (Option.get !current_return_type)
+                  ctx
+              then true
+              else (
+                Printf.printf "Type Error: expected return type ";
+                print_type (Option.get !current_return_type) ctx;
+                Printf.printf " but got ";
+                print_type (get_typeof (Option.get e) ctx) ctx;
+                Printf.printf "\n";
+                false)
+            else (
+              Printf.printf "Type Error: returning outside of function.\n";
+              false)
+        | _ -> true)
+    | Decl decl :: q -> (
+        match decl with
+        | Alias (s, t) -> check_type_rec q (Alias (s, t) :: ctx)
+        | Const bli | Let bli -> handle_vars bli ctx q
+        | Func (name, bli, topt, li) ->
+            let old_ret_type = !current_return_type in
+            if topt <> None then current_return_type := Some (Option.get topt)
+            else current_return_type := Some TypeAny;
+            let new_context1 =
+              Fun (name, if topt = None then TypeAny else Option.get topt)
+              :: ctx
+            in
+            let new_context2 = add_bindings_to_context bli new_context1 in
+            let res0 = List.for_all (fun x -> check_binding x ctx) bli in
+            let res1 = check_type_rec li new_context2 in
+            current_return_type := old_ret_type;
+            res0 && res1 && check_type_rec q new_context1)
   in
   check_type_rec ast []
 
@@ -540,9 +578,54 @@ let rec transpile ast =
       "return "
       ^ (if e <> None then trans_expr (Option.get e) else "")
       ^ ";\n" ^ transpile q
-  | Stmt (Compound li) :: q -> "{" ^ transpile li ^ "}" ^ transpile q
+  | Stmt (Compound li) :: q -> "{\n" ^ transpile li ^ "}\n" ^ transpile q
+  | Stmt (While (e, i)) :: q ->
+      "while (" ^ trans_expr e ^ ")\n" ^ transpile [ Stmt i ] ^ transpile q
+  | Decl (Alias _) :: q -> transpile q
+  | Decl (Let li) :: q ->
+      let l =
+        List.map
+          (fun (s, _, eopt) ->
+            "let " ^ s
+            ^ (if eopt = None then ""
+               else
+                 let e = Option.get eopt in
+                 " = " ^ trans_expr e)
+            ^ ";\n")
+          li
+      in
+      List.fold_right ( ^ ) l "" ^ transpile q
+  | Decl (Const li) :: q ->
+      let l =
+        List.map
+          (fun (s, _, eopt) ->
+            "const " ^ s
+            ^ (if eopt = None then ""
+               else
+                 let e = Option.get eopt in
+                 " = " ^ trans_expr e)
+            ^ ";\n")
+          li
+      in
+      List.fold_right ( ^ ) l "" ^ transpile q
+  | Decl (Func (n, bl, _, li)) :: q ->
+      ("function " ^ n ^ " ("
+      ^ (let l =
+           List.map
+             (fun (s, _, eopt) ->
+               s
+               ^ (if eopt = None then ""
+                  else
+                    let e = Option.get eopt in
+                    " = " ^ trans_expr e)
+               ^ ", ")
+             bl
+         in
+         List.fold_right ( ^ ) l "")
+      ^ ")"
+      ^ transpile [ Stmt (Compound li) ])
+      ^ transpile q
   | [] -> ""
-  | _ -> "TODO"
 
 and trans_expr e =
   match e with
@@ -565,7 +648,33 @@ and trans_expr e =
       trans_expr e ^ "("
       ^ List.fold_right ( ^ ) (List.map (fun e -> trans_expr e ^ ", ") li) ""
       ^ ")"
-  | _ -> "TODO "
+  | Unary (UnOpTypeof, e) -> ""
+  | Unary (op, e) -> unary_to_string op ^ trans_expr e
+  | Binary (l, o, r) ->
+      "(" ^ trans_expr l ^ " " ^ binary_to_string o ^ " " ^ trans_expr r ^ ")"
+  | Assign (lhs, rhs) -> trans_lm lhs ^ " = " ^ trans_expr rhs
+
+and unary_to_string op =
+  match op with UnOpMinus -> "-" | UnOpPlus -> "+" | UnOpNot -> "!" | _ -> ""
+
+and binary_to_string op =
+  match op with
+  | BinOpPlus -> "+"
+  | BinOpMinus -> "-"
+  | BinOpMul -> "*"
+  | BinOpDiv -> "/"
+  | BinOpLt -> "<"
+  | BinOpLeq -> "<="
+  | BinOpGt -> ">"
+  | BinOpGeq -> ">="
+  | BinOpEq -> "=="
+  | BinOpDif -> "!="
+  | BinOpEqq -> "==="
+  | BinOpNeqq -> "!=="
+  | BinOpAnd -> "&&"
+  | BinOpOr -> "||"
+  | BinOpNot -> "!"
+  | BinOpPow -> "**"
 
 and trans_lm lm =
   match lm with
@@ -574,17 +683,76 @@ and trans_lm lm =
   | Access (e, id) -> trans_expr e ^ "." ^ id
   | Expr e -> trans_expr e
 
-let () = Printf.printf "\nTokens:\n"
-let contents = read_whole_file "test.ts"
-let lexbuf = Lexing.from_string contents
-let _ = read lexbuf
-let () = Printf.printf "\nAst:\n"
-let lexbuf = Lexing.from_string contents
-let ast = program token lexbuf
-let () = print_program ast
-let () = Printf.printf "\nScope:\n"
-let () = Printf.printf "%s\n" (if check_scope ast then "true" else "false")
-let () = Printf.printf "\nType:\n"
-let () = Printf.printf "%s\n" (if check_type ast then "true" else "false")
-let () = Printf.printf "\nJavaScript:\n\n"
-let () = Printf.printf "%s\n" (transpile ast)
+let usage_msg = "tpscrpt <file> [flags] [-o <output>]"
+let input_file = ref None
+let output_file = ref None
+let dump_ast = ref false
+let dump_tokens = ref false
+let help = ref false
+
+let speclist =
+  [
+    ("-dump-ast", Arg.Set dump_ast, "Dumps the ast to the standard output.");
+    ( "-dump-tokens",
+      Arg.Set dump_tokens,
+      "Dumps the tokens to the standard output." );
+    ( "-output",
+      Arg.String
+        (fun s ->
+          if !output_file = None then output_file := Some s else help := true),
+      "Specifies the output file." );
+    ( "-o",
+      Arg.String
+        (fun s ->
+          if !output_file = None then output_file := Some s else help := true),
+      "Specifies the output file." );
+  ]
+
+let anon_fun filename =
+  if !input_file <> None then help := true else input_file := Some filename
+
+let print_tokens l =
+  let tok = ref (token l) in
+  while !tok <> EOF do
+    print_token !tok;
+    tok := token l
+  done
+
+let main () =
+  let () = Arg.parse speclist anon_fun usage_msg in
+  let () =
+    if !help then (
+      Arg.usage speclist usage_msg;
+      exit 0)
+  in
+  let () =
+    if !input_file = None then (
+      Printf.printf "Expected input file.\n%!";
+      Arg.usage speclist usage_msg;
+      exit 1)
+  in
+  let contents = read_whole_file (Option.get !input_file) in
+  let () =
+    if !dump_tokens then (
+      let l = Lexing.from_string contents in
+      print_tokens l;
+      Printf.printf "\n\n")
+  in
+  let lexbuf = Lexing.from_string contents in
+  let ast = program token lexbuf in
+  if !dump_ast then (
+    print_program ast;
+    Printf.printf "\n\n");
+  if not (check_scope ast) then (
+    Printf.printf "Error: scope error, terminating...\n";
+    exit 1)
+  else if not (check_type ast) then (
+    Printf.printf "Error: type error, terminating...\n";
+    exit 2)
+  else if !output_file = None then Printf.printf "%s\n" (transpile ast)
+  else
+    let oc = open_out (Option.get !output_file) in
+    Printf.fprintf oc "%s\n" (transpile ast);
+    close_out oc
+
+let () = main ()

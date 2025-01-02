@@ -85,28 +85,28 @@ let prt_aux f l =
     f h
 
 let print_binopkind = function
-  | BinOpPlus -> Printf.printf "BinOpPlus\n"
-  | BinOpMinus -> Printf.printf "BinOpMinus\n"
-  | BinOpMul -> Printf.printf "BinOpMul\n"
-  | BinOpDiv -> Printf.printf "BinOpDiv\n"
-  | BinOpLt -> Printf.printf "BinOpLt\n"
-  | BinOpLeq -> Printf.printf "BinOpLeq\n"
-  | BinOpGt -> Printf.printf "BinOpGt\n"
-  | BinOpGeq -> Printf.printf "BinOpGeq\n"
-  | BinOpEq -> Printf.printf "BinOpEq\n"
-  | BinOpDif -> Printf.printf "BinOpDif\n"
-  | BinOpEqq -> Printf.printf "BinOpEqq\n"
-  | BinOpNeqq -> Printf.printf "BinOpNeqq\n"
-  | BinOpAnd -> Printf.printf "BinOpAnd\n"
-  | BinOpOr -> Printf.printf "BinOpOr\n"
-  | BinOpNot -> Printf.printf "BinOpNot\n"
-  | BinOpPow -> Printf.printf "BinOpPow\n"
+  | BinOpPlus -> Printf.printf "BinOpPlus"
+  | BinOpMinus -> Printf.printf "BinOpMinus"
+  | BinOpMul -> Printf.printf "BinOpMul"
+  | BinOpDiv -> Printf.printf "BinOpDiv"
+  | BinOpLt -> Printf.printf "BinOpLt"
+  | BinOpLeq -> Printf.printf "BinOpLeq"
+  | BinOpGt -> Printf.printf "BinOpGt"
+  | BinOpGeq -> Printf.printf "BinOpGeq"
+  | BinOpEq -> Printf.printf "BinOpEq"
+  | BinOpDif -> Printf.printf "BinOpDif"
+  | BinOpEqq -> Printf.printf "BinOpEqq"
+  | BinOpNeqq -> Printf.printf "BinOpNeqq"
+  | BinOpAnd -> Printf.printf "BinOpAnd"
+  | BinOpOr -> Printf.printf "BinOpOr"
+  | BinOpNot -> Printf.printf "BinOpNot"
+  | BinOpPow -> Printf.printf "BinOpPow"
 
 let print_unopkind = function
-  | UnOpPlus -> Printf.printf "UnOpPlus\n"
-  | UnOpMinus -> Printf.printf "UnOpMinus\n"
-  | UnOpTypeof -> Printf.printf "UnOpTypeof\n"
-  | UnOpNot -> Printf.printf "UnOpNot\n"
+  | UnOpPlus -> Printf.printf "UnOpPlus"
+  | UnOpMinus -> Printf.printf "UnOpMinus"
+  | UnOpTypeof -> Printf.printf "UnOpTypeof"
+  | UnOpNot -> Printf.printf "UnOpNot"
 
 let rec print_left_member = function
   | Subscript (tab, index) ->

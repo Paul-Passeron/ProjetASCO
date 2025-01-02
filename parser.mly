@@ -13,30 +13,31 @@
 %token T_ASSIGN
 %token EOL EOF
 
+%nonassoc dummy3
+%nonassoc dummy2
 %nonassoc dummy
-
 %nonassoc T_ELSE
-
 %nonassoc T_OPEN_SQR
 %nonassoc T_BAR
 
 %left T_OPEN_PAR
-%right T_NOT T_TYPEOF
-%right T_POW
-%left T_MUL T_DIV
-%left T_PLUS T_MINUS
-%left T_LT T_LEQ T_GT T_GEQ
-%left T_EQ T_DIFF T_EQQ T_NEQQ
-%left T_AND
-%left T_OR
-%left T_ASSIGN
 %left T_DOT
-
+%left T_ASSIGN
+%left T_OR
+%left T_AND
+%left T_EQ T_DIFF T_EQQ T_NEQQ
+%left T_LT T_LEQ T_GT T_GEQ
+%left T_PLUS T_MINUS
+%left T_MUL T_DIV
+%right T_POW
+%right T_NOT T_TYPEOF
 
 %type <Tpscrpt.program>                     program
 %type <Tpscrpt.instruction>                 instr
 %type <Tpscrpt.instruction>                 compound
+%type <Tpscrpt.instruction>                 iff
 %type <Tpscrpt.declaration>                 decl
+%type <Tpscrpt.declaration>                 func
 %type <Tpscrpt.expression>                  expr
 %type <Tpscrpt.left_member>                 left_member
 %type <Tpscrpt.binding>                     binding
@@ -58,14 +59,19 @@
 %%
 
 program:
-  | instr program { (Stmt $1) :: $2 }
-  | decl program  { (Decl $1) :: $2 }
-  | EOF           { [] }
-  | T_OPEN_BRA T_CLOSE_BRA program { Stmt (Compound []) :: $3 }
+  | instr program                   { (Stmt $1) :: $2 }
+  | decl program                    { (Decl $1) :: $2 }
+  | EOF                             { [] }
+  | T_OPEN_BRA T_CLOSE_BRA program  { Stmt (Compound []) :: $3 }
 
 
 compound:
   | T_OPEN_BRA instr_list T_CLOSE_BRA                   { Compound $2 }
+
+iff: 
+  | T_OPEN_PAR expr T_CLOSE_PAR instr T_ELSE instr { If ($2, $4, Some $6) }
+  | T_OPEN_PAR expr T_CLOSE_PAR instr %prec dummy  { If ($2, $4, None) }
+  | T_OPEN_PAR expr T_CLOSE_PAR error                                          { Printf.printf "Syntax Error: Invalid if statement. Maybe there is an empty compound statement. If you want the if to not have any effect, use the empty statement ';'.\n"; exit 1 }
 
 instr:
   | T_SEMICOLON                                         { Empty }
@@ -75,20 +81,32 @@ instr:
   | T_RETURN expr T_SEMICOLON                           { Return (Some $2) }
   | T_RETURN T_SEMICOLON                                { Return None }
   | expr_aux T_SEMICOLON                                { Expr $1 }
-  | T_IF T_OPEN_PAR expr T_CLOSE_PAR instr T_ELSE instr { If ($3, $5, Some $7) }
-  | T_IF T_OPEN_PAR expr T_CLOSE_PAR instr %prec dummy  { If ($3, $5, None) }
+  | T_IF iff                                            { $2 }
 
+
+
+func: 
+  | T_IDENTIFIER T_OPEN_PAR binding_list_empty T_CLOSE_PAR type_opt T_OPEN_BRA instr_list_empty T_CLOSE_BRA
+    { Func ($1, $3, $5, $7) }
+  | T_IDENTIFIER T_OPEN_PAR binding_list_empty T_CLOSE_PAR error
+    { Printf.printf "Syntax Error: Expected type or function body after function declaration.\n"; exit 1 }
+  | T_IDENTIFIER T_OPEN_PAR error
+    { Printf.printf "Syntax Error: Unmatched '(' after function arguments.\n"; exit 1 }
+  | T_IDENTIFIER error
+    { Printf.printf "Syntax Error: Expected '(' after function name.\n"; exit 1 }
+  | error
+    { Printf.printf "Syntax Error: Expected function name after 'function' keyword.\n" ; exit 1 }
 
 decl:
-  | T_FUNCTION T_IDENTIFIER T_OPEN_PAR binding_list_empty T_CLOSE_PAR type_opt T_OPEN_BRA instr_list_empty T_CLOSE_BRA  { Func ($2, $4, $6, $8) }
-  | T_TYPE T_IDENTIFIER T_ASSIGN type_                          { Alias ($2, $4) }
-  | T_LET binding_list T_SEMICOLON                              { Let $2 }
-  | T_CONST binding_list T_SEMICOLON                            { Const $2 }
+  | T_FUNCTION func                     { $2 }
+  | T_TYPE T_IDENTIFIER T_ASSIGN type_  { Alias ($2, $4) }
+  | T_LET binding_list T_SEMICOLON      { Let $2 }
+  | T_CONST binding_list T_SEMICOLON    { Const $2 }
 
 tab_expr_list:
   | expr T_COMMA tab_expr_list  { $1 :: $3 }
-  |                             { [] }
   | expr                        { [$1] }
+  |                             { [] }
 
 object_expr_member:
   T_IDENTIFIER T_COLON expr { $1, $3 }
@@ -102,8 +120,8 @@ object_expr:
   | T_OPEN_BRA object_expr_member_list T_CLOSE_BRA  { Obj $2 }
 
 expr:
-  | T_OPEN_BRA T_CLOSE_BRA %prec dummy {Obj []}
-  | expr_aux { $1 }
+  | expr_aux                           { $1 }
+  | T_OPEN_BRA T_CLOSE_BRA %prec dummy { Obj [] }
 
 expr_aux:
   | T_INT_LIT                                       { IntConst $1 }
@@ -111,8 +129,8 @@ expr_aux:
   | T_STR_LIT                                       { StringConst $1 }
   | T_BOOL_LIT {BoolConst $1}
   | object_expr                                     { $1 }
-  | unop                                            {$1}
-  | binop                                           {$1}
+  | unop                                            { $1 }
+  | binop                                           { $1 }
   | left_member                                     { LeftMember $1 }
   | T_OPEN_SQR tab_expr_list T_CLOSE_SQR            { Tab $2 }
   | left_member T_ASSIGN expr                       { Assign ($1, $3) } 
@@ -141,6 +159,7 @@ binding:
 
 binding_list:
   | binding                       { [$1] }
+  | binding T_COMMA               { [$1] }
   | binding T_COMMA binding_list  { $1 :: $3 }
 
 binding_list_empty:
